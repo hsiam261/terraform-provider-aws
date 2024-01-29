@@ -1012,10 +1012,12 @@ func resourceInstanceCreate(ctx context.Context, d *schema.ResourceData, meta in
 			return sdkdiag.AppendErrorf(diags, "creating RDS DB Instance (restore from S3) (%s): %s", identifier, err)
 		}
 
-		if outputRaw != nil {
-			output := outputRaw.(*rds.RestoreDBInstanceFromS3Output)
-			resourceID = aws.StringValue(output.DBInstance.DbiResourceId)
+		if outputRaw == nil {
+			return sdkdiag.AppendErrorf(diags, "creating RDS DB Instance (restore from S3) (%s): API call returned null output", identifier)
 		}
+
+		output := outputRaw.(*rds.RestoreDBInstanceFromS3Output)
+		resourceID = aws.StringValue(output.DBInstance.DbiResourceId)
 	} else if v, ok := d.GetOk("snapshot_identifier"); ok {
 		input := &rds.RestoreDBInstanceFromDBSnapshotInput{
 			AutoMinorVersionUpgrade: aws.Bool(d.Get("auto_minor_version_upgrade").(bool)),
@@ -1244,10 +1246,12 @@ func resourceInstanceCreate(ctx context.Context, d *schema.ResourceData, meta in
 			return sdkdiag.AppendErrorf(diags, "creating RDS DB Instance (restore from snapshot) (%s): %s", identifier, err)
 		}
 
-		if outputRaw != nil {
-			output := outputRaw.(*rds.RestoreDBInstanceFromDBSnapshotOutput)
-			resourceID = aws.StringValue(output.DBInstance.DbiResourceId)
+		if outputRaw == nil {
+			return sdkdiag.AppendErrorf(diags, "creating RDS DB Instance (restore from snapshot) (%s): API call returned null output", identifier)
 		}
+
+		output := outputRaw.(*rds.RestoreDBInstanceFromDBSnapshotOutput)
+		resourceID = aws.StringValue(output.DBInstance.DbiResourceId)
 	} else if v, ok := d.GetOk("restore_to_point_in_time"); ok && len(v.([]interface{})) > 0 && v.([]interface{})[0] != nil {
 		tfMap := v.([]interface{})[0].(map[string]interface{})
 		input := &rds.RestoreDBInstanceToPointInTimeInput{
@@ -1406,10 +1410,12 @@ func resourceInstanceCreate(ctx context.Context, d *schema.ResourceData, meta in
 			return sdkdiag.AppendErrorf(diags, "creating RDS DB Instance (restore to point-in-time) (%s): %s", identifier, err)
 		}
 
-		if outputRaw != nil {
-			output := outputRaw.(*rds.RestoreDBInstanceToPointInTimeOutput)
-			resourceID = aws.StringValue(output.DBInstance.DbiResourceId)
+		if outputRaw == nil {
+			return sdkdiag.AppendErrorf(diags, "creating RDS DB Instance (restore from point-in-time) (%s): API call returned null output", identifier)
 		}
+
+		output := outputRaw.(*rds.RestoreDBInstanceToPointInTimeOutput)
+		resourceID = aws.StringValue(output.DBInstance.DbiResourceId)
 	} else {
 		if _, ok := d.GetOk("allocated_storage"); !ok {
 			diags = sdkdiag.AppendErrorf(diags, `"allocated_storage": required field is not set`)
@@ -1596,6 +1602,10 @@ func resourceInstanceCreate(ctx context.Context, d *schema.ResourceData, meta in
 			return sdkdiag.AppendErrorf(diags, "creating RDS DB Instance (%s): %s", identifier, err)
 		}
 
+		if outputRaw == nil {
+			return sdkdiag.AppendErrorf(diags, "creating RDS DB Instance (%s): API call returned null output", identifier)
+		}
+
 		output := outputRaw.(*rds.CreateDBInstanceOutput)
 		resourceID = aws.StringValue(output.DBInstance.DbiResourceId)
 
@@ -1606,17 +1616,13 @@ func resourceInstanceCreate(ctx context.Context, d *schema.ResourceData, meta in
 		}
 	}
 
+	d.SetId(resourceID)
+
 	var instance *rds.DBInstance
 	var err error
 	if instance, err = waitDBInstanceAvailableSDKv1(ctx, conn, identifier, d.Timeout(schema.TimeoutCreate)); err != nil {
 		return sdkdiag.AppendErrorf(diags, "waiting for RDS DB Instance (%s) create: %s", identifier, err)
 	}
-
-	if resourceID == "" {
-		resourceID = aws.StringValue(instance.DbiResourceId)
-	}
-
-	d.SetId(resourceID)
 
 	if requiresModifyDbInstance {
 		modifyDbInstanceInput.DBInstanceIdentifier = aws.String(identifier)
